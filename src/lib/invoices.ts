@@ -15,6 +15,7 @@ import type { Company } from "./registry";
 
 export type InvoiceCode = (typeof INVOICE_CODES)[number];
 export type Regime = (typeof REGIMES)[number];
+export type Immunity = "" | "livros";
 export type InvoiceStatus = (typeof invoice.$inferSelect)["status"];
 
 type Nfse = {
@@ -25,6 +26,7 @@ type Nfse = {
   registration: string;
   taxRate: string;
   issRate: string;
+  immunity: Immunity;
   key: string;
   chain: string;
   expiresAt: Date;
@@ -121,6 +123,11 @@ export function regimeOf(company: Company): Regime {
   return company.mei ? "mei" : company.simples ? "simples" : "normal";
 }
 
+// The only ISS immunity a store has: books, e-books included (CF art. 150, VI, d; STF Súmula Vinculante 57).
+export function immunity(value: string): Immunity | undefined {
+  return value === "" || value === "livros" ? value : undefined;
+}
+
 export function regime(value: string): Regime | undefined {
   return REGIMES.find((entry) => entry === value);
 }
@@ -193,6 +200,7 @@ async function config(): Promise<Nfse | undefined> {
     registration: read("registration"),
     taxRate: read("taxRate"),
     issRate: read("issRate"),
+    immunity: immunity(read("immunity")) ?? "",
     key: read("key"),
     chain: read("chain"),
     expiresAt: new Date(read("expiresAt")),
@@ -297,7 +305,14 @@ function dpsId(nfse: Nfse, number: string): string {
 function totals(nfse: Nfse): string {
   if (nfse.regime === "mei") return "<indTotTrib>0</indTotTrib>";
   if (nfse.regime === "simples") return element("pTotTribSN", nfse.taxRate);
-  return `<pTotTrib><pTotTribFed>${nfse.taxRate}</pTotTribFed><pTotTribEst>0.00</pTotTribEst><pTotTribMun>${nfse.issRate}</pTotTribMun></pTotTrib>`;
+  return `<pTotTrib><pTotTribFed>${nfse.taxRate}</pTotTribFed><pTotTribEst>0.00</pTotTribEst><pTotTribMun>${nfse.immunity ? "0.00" : nfse.issRate}</pTotTribMun></pTotTrib>`;
+}
+
+// TCTribMunicipal: tribISSQN 1 is taxable, 2 immune; tpImunidade 4 is books, and it comes before tpRetISSQN.
+function issqn(nfse: Nfse): string {
+  return nfse.immunity === "livros"
+    ? "<tribISSQN>2</tribISSQN><tpImunidade>4</tpImunidade>"
+    : "<tribISSQN>1</tribISSQN>";
 }
 
 function dps(nfse: Nfse, row: Due, number: string, description: string, at: Date): { id: string; xml: string } {
@@ -325,7 +340,7 @@ function dps(nfse: Nfse, row: Due, number: string, description: string, at: Date
     `<cServ><cTribNac>${nfse.service}</cTribNac><xDescServ>${escape(description.slice(0, 2000))}</xDescServ></cServ>` +
     `<infoCompl><xInfComp>${escape(extra.slice(0, 2000))}</xInfComp></infoCompl></serv>` +
     `<valores><vServPrest><vServ>${formatDecimal(row.amount)}</vServ></vServPrest>` +
-    `<trib><tribMun><tribISSQN>1</tribISSQN><tpRetISSQN>1</tpRetISSQN></tribMun><totTrib>${totals(nfse)}</totTrib></trib></valores>` +
+    `<trib><tribMun>${issqn(nfse)}<tpRetISSQN>1</tpRetISSQN></tribMun><totTrib>${totals(nfse)}</totTrib></trib></valores>` +
     `</infDPS>`;
 
   return { id, xml: signed("DPS", "1.01", inner, id, nfse) };

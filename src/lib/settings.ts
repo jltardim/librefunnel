@@ -95,7 +95,19 @@ const INTEGRATIONS = {
   evolution: { fields: ["url"], secrets: ["key"] },
   whatsapp: { fields: ["phoneId", "wabaId", "number"], secrets: ["token", "appSecret"] },
   nfse: {
-    fields: ["cnpj", "holder", "expiresAt", "city", "place", "regime", "service", "registration", "taxRate", "issRate"],
+    fields: [
+      "cnpj",
+      "holder",
+      "expiresAt",
+      "city",
+      "place",
+      "regime",
+      "service",
+      "registration",
+      "taxRate",
+      "issRate",
+      "immunity",
+    ],
     secrets: ["key", "chain"],
   },
 } as const satisfies Record<IntegrationKind, { fields: readonly string[]; secrets: readonly string[] }>;

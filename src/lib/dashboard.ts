@@ -22,7 +22,7 @@ import { credentials } from "./settings";
 import { productNames, storePix } from "./catalog/products";
 import { addSeconds, db, one } from "./db";
 import { baseUrl } from "./guard";
-import { invoiceCode, publicLink, regime } from "./invoices";
+import { immunity, invoiceCode, publicLink, regime } from "./invoices";
 import { cloudOf, cloudStatus, evolutionOf, messageCode, replyOpen, SMTP_PRESETS, whatsappState } from "./messages";
 import { conversionError, cryptoMode } from "./orders/crypto";
 import { PIX_PROVIDERS, pixProvider, pspConfigured, pspKeys } from "./orders/psp";
@@ -710,6 +710,7 @@ export async function integrations() {
       registration: stored("nfse")("registration"),
       taxRate: stored("nfse")("taxRate"),
       issRate: stored("nfse")("issRate"),
+      immunity: immunity(stored("nfse")("immunity")) ?? "",
     },
     failedMessages,
   };

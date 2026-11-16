@@ -286,6 +286,8 @@ export async function saveNfse(...[, form]: FormArgs): Promise<ActionState> {
   if (!/^\d{6}$/.test(service)) return { code: "INVALID_SERVICE" };
   const registration = same ? field(form, "registration").trim() : "";
   if (registration && !/^[A-Za-z0-9.\-/]{1,15}$/.test(registration)) return { code: "INVALID_PAYLOAD" };
+  const immunity = invoices.immunity(same ? field(form, "immunity") : "");
+  if (immunity === undefined) return { code: "INVALID_PAYLOAD" };
   const defaults = invoices.DEFAULT_RATES[regime];
   const taxRate = regime === "mei" ? "" : parseRate((same && field(form, "taxRate")) || defaults.taxRate);
   const issRate = regime === "normal" ? parseRate((same && field(form, "issRate")) || defaults.issRate) : "";
@@ -301,6 +303,7 @@ export async function saveNfse(...[, form]: FormArgs): Promise<ActionState> {
       registration,
       taxRate,
       issRate,
+      immunity,
       ...(certificate
         ? { cnpj: certificate.cnpj, holder: certificate.holder, expiresAt: certificate.expiresAt.toISOString() }
         : {}),

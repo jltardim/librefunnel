@@ -67,6 +67,7 @@ function nfseForm(fields: Record<string, string>, file?: Buffer): FormData {
     registration: "",
     taxRate: "",
     issRate: "",
+    immunity: "",
     password: PASSWORD,
     ...fields,
   });
@@ -265,6 +266,42 @@ describe("NFS-e", () => {
     expect(cancel).toContain(`<CNPJAutor>${CNPJ}</CNPJAutor><chNFSe>${KEY}</chNFSe>`);
     verifySignature(cancel, "infPedReg");
     expect((await stored(id)).status).toBe("canceled");
+  });
+
+  test("a book's note is immune to ISS: tribISSQN 2 with tpImunidade 4, and turning it off taxes again", async () => {
+    expect((await integrations()).nfse).toMatchObject({ immunity: "" });
+
+    const book = { regime: "normal", city: CITY, service: "010902", immunity: "livros" };
+    expect(await saveNfse({ code: null }, nfseForm({ ...book, immunity: "talvez" }))).toEqual({
+      code: "INVALID_PAYLOAD",
+    });
+    expect(await saveNfse({ code: null }, nfseForm(book))).toEqual({ code: null, ok: true });
+    expect((await integrations()).nfse).toMatchObject({ service: "010902", immunity: "livros" });
+
+    await paidOrder("529.982.247-25");
+    await issueInvoices();
+    const [immune] = server.to("POST", "/SefinNacional/nfse");
+    const xml = unpacked(immune?.body ?? "{}", "dpsXmlGZipB64");
+    expect(xml).toContain("<cTribNac>010902</cTribNac>");
+    expect(xml).toContain(
+      "<tribMun><tribISSQN>2</tribISSQN><tpImunidade>4</tpImunidade><tpRetISSQN>1</tpRetISSQN></tribMun>",
+    );
+    expect(xml).toContain("<pTotTribMun>0.00</pTotTribMun>");
+    verifySignature(xml, "infDPS");
+
+    expect(await saveNfse({ code: null }, nfseForm({ ...book, immunity: "" }))).toEqual({ code: null, ok: true });
+    // Sefin gives every note its own access key.
+    server.routes["POST /SefinNacional/nfse"] = {
+      status: 201,
+      body: { chaveAcesso: `${CITY}2${"1".repeat(42)}`, idDps: "y" },
+    };
+    await paidOrder("529.982.247-25");
+    await issueInvoices();
+    const [, taxed] = server.to("POST", "/SefinNacional/nfse");
+    const again = unpacked(taxed?.body ?? "{}", "dpsXmlGZipB64");
+    expect(again).toContain("<tribMun><tribISSQN>1</tribISSQN><tpRetISSQN>1</tpRetISSQN></tribMun>");
+    expect(again).not.toContain("tpImunidade");
+    expect(again).toContain("<pTotTribMun>5.00</pTotTribMun>");
   });
 
   test("without a CPF the note has no tomador, and a lost answer is looked up instead of issuing twice", async () => {
