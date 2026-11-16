@@ -2,7 +2,7 @@ import { createHmac } from "node:crypto";
 import { request as httpRequest } from "node:http";
 import type { RequestOptions } from "node:https";
 import { gunzipSync } from "node:zlib";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import forge from "node-forge";
 import { createElement } from "react";
 import { prerender } from "react-dom/static";
@@ -16,7 +16,7 @@ import { removeCredentials, saveCredentials } from "@/lib/settings";
 import { db, one } from "@/lib/db";
 import { currentMember } from "@/lib/members";
 import { checkCharges } from "@/lib/orders/charges";
-import { invoice, order, payment } from "@/lib/schema";
+import { integration, invoice, order, payment, product } from "@/lib/schema";
 import { recordTouch, visitor } from "@/lib/tracking/visitors";
 import { POST as upload } from "@/app/admin/media/route";
 import { GET as attachment } from "@/app/m/[product]/[lesson]/anexo/route";
@@ -205,7 +205,10 @@ describe("acttech", () => {
     expect((await download("planilha-preco", "m1a1")).status).toBe(404);
 
     const refunded = await buyer("reembolso@example.com");
-    expect((await download("bolo-no-pote", "m1a1")).status).toBe(200);
+    const antes = await download("bolo-no-pote", "m1a1");
+    expect(antes.status).toBe(200);
+    // Lê o corpo até o fim: é isso que fecha o arquivo aberto pelo stream (no Bun 1.4.4 um arquivo fechado pela coleta de lixo é erro).
+    await antes.arrayBuffer();
     const memberCookies = new Map(cookieStore);
     await signInAsAdmin();
     expect(await refundOrder({ code: null }, form({ orderId: refunded }))).toEqual({ code: null, ok: true });
@@ -445,3 +448,42 @@ function nfseForm(pfx: Buffer): FormData {
   data.set("certificate", new File([new Uint8Array(pfx)], "act-tech.pfx", { type: "application/x-pkcs12" }));
   return data;
 }
+
+describe("acttech", () => {
+  // Bun.SQL (Bun 1.4.4) manda texto JSON para jsonb como string JSON; o PGlite não. Rode também com DATABASE_URL de um
+  // Postgres de verdade: lá a conexão era recusada pela regra integration_fields e as listas viravam texto.
+  test("jsonb: conexão e produto gravam objeto e lista, não texto", async () => {
+    await saveCredentials(
+      "smtp",
+      { host: "smtp.resend.com", port: "465", user: "resend", from: "loja@acttech.shop" },
+      { password: "re_teste_1234567890" },
+    );
+
+    const conexao = one(
+      await db()
+        .select({
+          fields: sql<string>`jsonb_typeof(${integration.fields})`,
+          secrets: sql<string>`jsonb_typeof(${integration.secrets})`,
+          host: sql<string>`${integration.fields}->>'host'`,
+        })
+        .from(integration)
+        .where(eq(integration.kind, "smtp")),
+    );
+
+    expect(conexao).toEqual({ fields: "object", secrets: "object", host: "smtp.resend.com" });
+    await db()
+      .update(product)
+      .set({ faq: [{ q: "Serve para recém-nascido?", a: "Sim." }] })
+      .where(eq(product.slug, "bolo-no-pote"));
+
+    const lista = one(
+      await db()
+        .select({ faq: sql<string>`jsonb_typeof(${product.faq})` })
+        .from(product)
+        .where(eq(product.slug, "bolo-no-pote")),
+    );
+
+    expect(lista.faq).toBe("array");
+    await removeCredentials("smtp");
+  });
+});

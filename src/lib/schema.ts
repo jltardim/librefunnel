@@ -5,8 +5,8 @@ import {
   boolean,
   check,
   index,
+  customType,
   integer,
-  jsonb,
   pgTable,
   primaryKey,
   text,
@@ -14,6 +14,22 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 import type { Faq, Testimonial, Trigger } from "./catalog/products";
+
+// jsonb que grava o valor como objeto ou lista também no Bun.SQL: o Bun 1.4.4 manda o texto JSON de um parâmetro como string
+// JSON (`'{"a":1}'::jsonb` vira o texto "{\"a\":1}"), o que quebrava a regra integration_fields e guardava listas como texto.
+// O cast por text faz o Postgres interpretar o JSON no Bun.SQL e no PGlite do mesmo jeito.
+const jsonb = customType<{ data: unknown; driverData: unknown }>({
+  dataType: () => "jsonb",
+  toDriver: (value) => sql`${JSON.stringify(value)}::text::jsonb`,
+  fromDriver: (value) => {
+    if (typeof value !== "string") return value;
+    try {
+      return JSON.parse(value);
+    } catch {
+      return value;
+    }
+  },
+});
 
 // The const type parameter keeps each value as a literal type, so enum columns stay typed without a cast.
 function literals<const T extends readonly [string, ...string[]]>(...values: T): T {
