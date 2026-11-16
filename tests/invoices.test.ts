@@ -211,6 +211,14 @@ describe("NFS-e", () => {
     expect(await saveNfse({ code: null }, nfseForm({}, pfx))).toEqual({ code: "CNPJ_LOOKUP_FAILED" });
   });
 
+  test("a first connection with the registry down uses the regime and city typed beside the certificate", async () => {
+    await removeCredentials("nfse");
+    server.routes[`GET /api/cnpj/v1/${CNPJ}`] = { status: 503, body: "" };
+    const typed = { regime: "simples", city: CITY, service: "010902", immunity: "livros" };
+    expect(await saveNfse({ code: null }, nfseForm(typed, pfx))).toEqual({ code: null, ok: true });
+    expect((await integrations()).nfse).toMatchObject({ cnpj: CNPJ, ...typed, place: "", taxRate: "6.00" });
+  });
+
   test("the certificate is checked, its key goes only to Sefin over mutual TLS, and the city is confirmed", async () => {
     expect(await saveNfse({ code: null }, nfseForm({ password: "errada" }, pfx))).toEqual({
       code: "CERTIFICATE_UNREADABLE",

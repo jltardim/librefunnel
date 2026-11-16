@@ -272,8 +272,8 @@ export async function saveNfse(...[, form]: FormArgs): Promise<ActionState> {
     : undefined;
 
   if (typeof certificate === "string") return { code: certificate };
-  // A certificate of another company drops the fields typed for the previous one.
-  const same = !certificate || certificate.cnpj === stored("cnpj");
+  // A certificate of another company drops the fields typed for the previous one; a first connection keeps them.
+  const same = !certificate || !stored("cnpj") || certificate.cnpj === stored("cnpj");
   const typedCity = same ? field(form, "city").trim() : "";
   const typedRegime = same ? invoices.regime(field(form, "regime")) : undefined;
   const cnpj = certificate?.cnpj ?? stored("cnpj");
