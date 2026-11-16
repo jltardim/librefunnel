@@ -122,8 +122,12 @@ whether the difference is significant (two-proportion test), so noise is not dec
 
 ### 15. Lesson materials, comments and quizzes
 
-PDF and file attachments per lesson, through signed links (no zip on request). Comments per lesson with admin
-moderation. Quizzes with a passing grade, scored on the server with wrong answers penalized.
+PDF attachments per lesson (done): one PDF of up to 50 MB in `lesson.attachment`, with the uploaded file name in
+`lesson.attachment_name`, downloaded at `/m/<product>/<lesson>/anexo` under the same access check as the lesson video
+(`media/serving.ts`), as `Content-Disposition: attachment` with that name; a connected bucket answers through a signed
+link. Without a session the link goes to the members login; a buyer of another product or a refunded one gets 404. Still
+to do: other file types (no zip on request). Comments per lesson with admin moderation. Quizzes with a passing grade,
+scored on the server with wrong answers penalized.
 
 ### Small items
 

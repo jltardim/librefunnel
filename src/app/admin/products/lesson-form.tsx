@@ -33,6 +33,13 @@ export function LessonForm({ module, lesson }: { module?: number; lesson?: Modul
       <Field label="Texto da aula" hint="Sem vídeo, a aula vira uma aula de leitura.">
         {(control) => <Textarea {...control} name="text" rows={6} maxLength={20000} defaultValue={lesson?.text} />}
       </Field>
+      <MediaField
+        name="attachment"
+        kind="pdf"
+        label="PDF da aula"
+        value={lesson?.attachment ?? undefined}
+        originalName={{ field: "attachmentName", value: lesson?.attachmentName ?? undefined }}
+      />
     </SaveForm>
   );
 }

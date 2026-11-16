@@ -168,8 +168,9 @@ const ERROR_TEXT: Record<Code, string> = {
   INVALID_DELAY:
     "O tempo de espera precisa ser de pelo menos 1 minuto e menor que a validade do pedido, definida em Configurações.",
   MEDIA_TYPE:
-    "Formato não aceito. Envie vídeo MP4 ou WebM, ou imagem JPG, PNG ou WebP. Arquivos renomeados de outro formato são recusados.",
-  MEDIA_TOO_LARGE: "Arquivo grande demais: vídeos até 1 GB e imagens até 10 MB. Comprima o arquivo e envie de novo.",
+    "Formato não aceito. Envie vídeo MP4 ou WebM, imagem JPG, PNG ou WebP, ou PDF no campo PDF da aula. Arquivos renomeados de outro formato, como .docx, são recusados: salve como PDF e envie de novo.",
+  MEDIA_TOO_LARGE:
+    "Arquivo grande demais: vídeos até 1 GB, imagens até 10 MB e PDF até 50 MB. Comprima o arquivo e envie de novo.",
   SMTP_AUTH_FAILED:
     "O servidor de e-mail recusou o usuário ou a senha. No Gmail, use uma senha de app de 16 letras (myaccount.google.com/apppasswords), não a senha normal; na Brevo, a chave SMTP, não a de API. Corrija em Conexões e teste de novo.",
   SMTP_UNREACHABLE:

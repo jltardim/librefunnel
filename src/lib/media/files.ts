@@ -5,6 +5,7 @@ import { dataDir } from "../db";
 const VIDEO_MAX = 1024 ** 3;
 const IMAGE_MAX = 10 * 1024 ** 2;
 const CAPTIONS_MAX = 1024 ** 2;
+const PDF_MAX = 50 * 1024 ** 2;
 
 export const CHUNK = 256 * 1024;
 
@@ -13,7 +14,7 @@ export const MEDIA_ID = /^([a-f0-9]{32})(?:[./]|$)/;
 
 export const ID_TEXT = "([a-f0-9]{32})";
 
-export const FILE = /^[a-f0-9]{32}\.(mp4|webm|jpg|png|webp|vtt)$/;
+export const FILE = /^[a-f0-9]{32}\.(mp4|webm|jpg|png|webp|vtt|pdf)$/;
 
 export const FOLDER = /^[a-f0-9]{32}$/;
 
@@ -51,6 +52,12 @@ const TYPES = [
     mime: "text/vtt",
     max: CAPTIONS_MAX,
     sniff: (head: Buffer) => /^(\xef\xbb\xbf)?WEBVTT/.test(head.toString("latin1")),
+  },
+  {
+    ext: "pdf",
+    mime: "application/pdf",
+    max: PDF_MAX,
+    sniff: (head: Buffer) => head.toString("latin1", 0, 5) === "%PDF-",
   },
 ];
 

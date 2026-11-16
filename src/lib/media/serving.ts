@@ -1,9 +1,9 @@
 import "server-only";
 import { open, stat } from "node:fs/promises";
 import { join } from "node:path";
-import { eq, inArray, or } from "drizzle-orm";
+import { and, eq, inArray, or } from "drizzle-orm";
 import { db } from "../db";
-import { isAdmin } from "../sessions";
+import { isAdmin, readSession } from "../sessions";
 import { currentMember } from "../members";
 import { lesson, module, product } from "../schema";
 import { LINKS, bucket, call, presign } from "./bucket";
@@ -56,7 +56,7 @@ async function checkAccess(urls: string[]): Promise<Visibility | "denied"> {
       .selectDistinct({ product: module.product })
       .from(lesson)
       .innerJoin(module, eq(module.id, lesson.moduleId))
-      .where(inArray(lesson.video, urls)),
+      .where(or(inArray(lesson.video, urls), inArray(lesson.attachment, urls))),
     db().$count(
       product,
       or(
@@ -133,6 +133,50 @@ export async function serveMedia(request: Request, file: string): Promise<Respon
   if (!info?.isFile()) return serveRemote(file, mime, visibility);
   const cache = visibility === "public" ? "public, max-age=31536000, immutable" : "private, no-store";
   return sendFile(request, path, info.size, mime, cache);
+}
+
+// The ASCII name is for old browsers; filename* keeps the accents of the name the seller uploaded.
+function disposition(name: string): string {
+  const plain = name.normalize("NFD").replace(/[^\x20-\x7e]/g, "");
+  const encoded = encodeURIComponent(name).replace(/['()*]/g, (char) => `%${char.charCodeAt(0).toString(16)}`);
+  return `attachment; filename="${plain}"; filename*=UTF-8''${encoded}`;
+}
+
+// A lesson PDF is paid content like its video: the same check, and a visitor without a session goes to the login.
+export async function serveAttachment(request: Request, productSlug: string, lessonSlug: string): Promise<Response> {
+  if (!(await readSession("member")) && !(await isAdmin()))
+    return new Response(null, { status: 302, headers: { Location: "/m" } });
+
+  const [found] = await db()
+    .select({ url: lesson.attachment, name: lesson.attachmentName })
+    .from(lesson)
+    .innerJoin(module, eq(module.id, lesson.moduleId))
+    .where(and(eq(lesson.slug, lessonSlug), eq(module.product, productSlug)));
+
+  if (!found?.url || !found.name || (await access([found.url])) === "denied")
+    return new Response(null, { status: 404 });
+  const file = found.url.replace(/^\/media\//, "");
+  const saveAs = disposition(found.name);
+  const path = join(mediaDir(), file);
+  const info = await stat(path).catch(() => undefined);
+
+  if (info?.isFile()) {
+    const response = await sendFile(request, path, info.size, "application/pdf", "private, no-store");
+    response.headers.set("Content-Disposition", saveAs);
+    return response;
+  }
+
+  const target = await bucket();
+  if (!target) return new Response(null, { status: 404 });
+  const query = { "response-content-disposition": saveAs, "response-content-type": "application/pdf" };
+
+  return new Response(null, {
+    status: 302,
+    headers: {
+      Location: presign(target, "GET", `${PREFIX}${file}`, "private", query),
+      "Cache-Control": LINKS.private.cache,
+    },
+  });
 }
 
 // Safari only plays video that answers byte ranges with 206.

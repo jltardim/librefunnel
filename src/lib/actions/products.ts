@@ -8,6 +8,7 @@ import { baseUrl, demoMode } from "../guard";
 import { isAdmin } from "../sessions";
 import {
   SLUG,
+  parseAttachment,
   parseDomain,
   parseInteger,
   parseLine,
@@ -186,11 +187,20 @@ export async function saveLesson(...[, form]: FormArgs): Promise<ActionState> {
   if (!name) return { code: "INVALID_TITLE" };
   const video = parseMedia(field(form, "video"));
   if (video === undefined) return { code: "INVALID_MEDIA" };
+  const attachment = parseAttachment(field(form, "attachment"), field(form, "attachmentName"));
+  if (attachment === undefined) return { code: "INVALID_MEDIA" };
   const body = parseText(field(form, "text"), 20_000);
   if (body === undefined) return { code: "INVALID_TEXT" };
   const slug = field(form, "lesson");
   const target = SLUG.test(slug) ? { slug } : { module: parseRowId(field(form, "module")) ?? 0 };
-  return done(
-    (await course.saveLesson(target, { title: name, video: video ?? "", text: body })) ? null : "INVALID_TRANSITION",
-  );
+
+  const values = {
+    title: name,
+    video: video ?? "",
+    text: body,
+    attachment: attachment?.url ?? null,
+    attachmentName: attachment?.name ?? null,
+  };
+
+  return done((await course.saveLesson(target, values)) ? null : "INVALID_TRANSITION");
 }

@@ -69,7 +69,7 @@ export async function saveModule(
 // Lesson slugs are random and never change, so progress rows survive renames and reordering.
 export async function saveLesson(
   target: { slug: string } | { module: number },
-  values: { title: string; video: string; text: string },
+  values: { title: string; video: string; text: string; attachment: string | null; attachmentName: string | null },
 ): Promise<boolean> {
   if ("slug" in target) {
     const changed = await db()

@@ -185,23 +185,27 @@ export function MediaUpload({
   button,
   remove,
   titleField,
+  originalName,
 }: {
   id: string;
   "aria-describedby"?: string;
   name: string;
-  kind: "video" | "image" | "captions";
+  kind: "video" | "image" | "captions" | "pdf";
   value?: string;
   button: Look;
   remove: Look;
   titleField?: string;
+  originalName?: { field: string; value?: string };
 }) {
   const [path, setPath] = useState(value ?? "");
+  const [fileName, setFileName] = useState(originalName?.value ?? "");
   const [progress, setProgress] = useState<number | null>(null);
   const [code, setCode] = useState<Code | null>(null);
   const hidden = useRef<HTMLInputElement>(null);
 
-  function choose(next: string) {
+  function choose(next: string, uploaded = "") {
     setPath(next);
+    setFileName(uploaded);
     // The hidden input changes without a user event, so the form's unsaved-changes bar would not notice.
     queueMicrotask(() => hidden.current?.dispatchEvent(new Event("input", { bubbles: true })));
   }
@@ -256,7 +260,7 @@ export function MediaUpload({
       if (start.reply.local === true) {
         const local = await send("POST", `/admin/media?${new URLSearchParams({ name: file.name })}`, file, percent);
 
-        if (typeof local.reply.path === "string") return choose(local.reply.path);
+        if (typeof local.reply.path === "string") return choose(local.reply.path, file.name);
         return failed(local.status, local.reply);
       }
 
@@ -289,7 +293,7 @@ export function MediaUpload({
         () => undefined,
       );
 
-      if (typeof finish.reply.path === "string") return choose(finish.reply.path);
+      if (typeof finish.reply.path === "string") return choose(finish.reply.path, file.name);
       failed(finish.status, finish.reply);
     } catch {
       setCode("UPLOAD_FAILED");
@@ -301,6 +305,7 @@ export function MediaUpload({
   return (
     <Stack gap={2}>
       <input ref={hidden} type="hidden" name={name} value={path} />
+      {originalName ? <input type="hidden" name={originalName.field} value={fileName} /> : null}
       <Row gap={3}>
         {!path ? (
           <Text variant="body-sm" tone="muted">
@@ -310,6 +315,8 @@ export function MediaUpload({
           <img className={styles.thumb} src={path} alt="" />
         ) : kind === "captions" ? (
           <Text variant="body-sm">Legenda enviada</Text>
+        ) : kind === "pdf" ? (
+          <Text variant="body-sm">{fileName || "PDF enviado"}</Text>
         ) : (
           <video className={styles.thumb} src={path} preload="metadata" muted playsInline />
         )}
@@ -321,7 +328,12 @@ export function MediaUpload({
               type="file"
               className="sr-only"
               accept={
-                { image: "image/jpeg,image/png,image/webp", video: "video/mp4,video/webm", captions: ".vtt" }[kind]
+                {
+                  image: "image/jpeg,image/png,image/webp",
+                  video: "video/mp4,video/webm",
+                  captions: ".vtt",
+                  pdf: "application/pdf",
+                }[kind]
               }
               disabled={progress !== null}
               onChange={(event) => {

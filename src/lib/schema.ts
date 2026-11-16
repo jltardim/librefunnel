@@ -547,6 +547,9 @@ export const lesson = pgTable(
     title: text("title").notNull(),
     video: text("video").notNull().default(""),
     text: text("text").notNull().default(""),
+    // A PDF the buyer downloads under the name it was uploaded with.
+    attachment: text("attachment"),
+    attachmentName: text("attachment_name"),
     position: integer("position").notNull(),
     archivedAt: timestamptz("archived_at"),
   },

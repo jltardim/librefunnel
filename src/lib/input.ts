@@ -12,6 +12,7 @@ const NAME = /^[\p{L}\p{M}'’. -]+$/u;
 export const ID = /^[a-z0-9]{20}$/;
 export const SLUG = /^[a-z0-9][a-z0-9-]{0,59}$/;
 const MEDIA = /^\/(media|demo)\/[\w.-]{1,100}$/;
+const PDF = /^\/media\/[a-f0-9]{32}\.pdf$/;
 const ROW_ID = /^\d{1,12}$/;
 const MULTILINE_CONTROL = /[\u0000-\u0008\u000b-\u001f\u007f]/;
 export const CREDENTIAL = /^[\x21-\x7e]{1,4000}$/;
@@ -179,6 +180,15 @@ export function parseMedia(raw: string): string | null | undefined {
   const value = raw.trim();
   if (!value) return null;
   return MEDIA.test(value) ? value : undefined;
+}
+
+// The name of the seller's file is the name the buyer's download is saved under.
+export function parseAttachment(path: string, name: string): { url: string; name: string } | null | undefined {
+  const url = path.trim();
+  if (!url) return null;
+  const file = name.trim();
+  const valid = PDF.test(url) && file.length <= 200 && /\.pdf$/i.test(file) && !/[\u0000-\u001f\u007f"\\/]/.test(file);
+  return valid ? { url, name: file } : undefined;
 }
 
 export function parseInteger(raw: string, min: number, max: number): number | undefined {

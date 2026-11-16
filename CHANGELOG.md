@@ -5,6 +5,9 @@ dela vira as notas da release no GitHub e no aviso de atualização do painel.
 
 ## Próxima versão
 
+- Aula com PDF: anexe um PDF de até 50 MB na aula e o comprador baixa pelo botão Baixar o PDF, com o nome do arquivo que
+  você enviou. Só quem tem acesso ao produto baixa; um reembolso tira o acesso ao PDF junto com o das aulas.
+
 ## v0.10.0 (2026-11-16)
 
 - Atualizar pelo painel traz também a configuração do servidor da versão nova (como a de domínios próprios) e o próprio

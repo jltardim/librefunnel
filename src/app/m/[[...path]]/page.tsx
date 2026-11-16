@@ -306,6 +306,13 @@ async function Lesson({
                 </Stack>
               </Card>
             ) : null}
+            {lesson.attachment ? (
+              <Row>
+                <Button href={`/m/${product.slug}/${lesson.id}/anexo`} variant="solid" tone="primary" icon="download">
+                  Baixar o PDF
+                </Button>
+              </Row>
+            ) : null}
             <Row gap={3}>
               {isDone ? (
                 <Badge tone="success">Aula concluída</Badge>

@@ -39,7 +39,15 @@ export type CatalogCode =
   | "INVALID_DOMAIN"
   | "DOMAIN_TAKEN";
 
-type Lesson = { id: string; title: string; video: string; text: string; archived: boolean };
+type Lesson = {
+  id: string;
+  title: string;
+  video: string;
+  text: string;
+  attachment: string | null;
+  attachmentName: string | null;
+  archived: boolean;
+};
 
 export type Module = { id: number; title: string; cover?: string; lessons: Lesson[]; archived: boolean };
 
@@ -199,6 +207,8 @@ async function load(filter: SQL | undefined, admin: boolean): Promise<Product[]>
         title: lesson.title,
         video: lesson.video,
         text: lesson.text,
+        attachment: lesson.attachment,
+        attachmentName: lesson.attachmentName,
         archivedAt: lesson.archivedAt,
       },
     })
