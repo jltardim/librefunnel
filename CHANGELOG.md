@@ -7,6 +7,7 @@ dela vira as notas da release no GitHub e no aviso de atualização do painel.
 
 - Aula com PDF: anexe um PDF de até 50 MB na aula e o comprador baixa pelo botão Baixar o PDF, com o nome do arquivo que
   você enviou. Só quem tem acesso ao produto baixa; um reembolso tira o acesso ao PDF junto com o das aulas.
+- A NFS-e descreve o serviço com o nome do produto vendido, sem o "Acesso ao curso online" na frente.
 
 ## v0.10.0 (2026-11-16)
 

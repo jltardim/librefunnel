@@ -1,19 +1,34 @@
+import { request as httpRequest } from "node:http";
+import type { RequestOptions } from "node:https";
+import { gunzipSync } from "node:zlib";
+import forge from "node-forge";
 import { createElement } from "react";
 import { prerender } from "react-dom/static";
-import { beforeEach, describe, expect, test, setSystemTime } from "bun:test";
+import { beforeEach, describe, expect, test, vi, setSystemTime } from "bun:test";
 import { enterFromOrder } from "@/lib/actions/members";
 import { refundOrder } from "@/lib/actions/orders";
-import { saveLesson } from "@/lib/actions/products";
+import { createProduct, saveLesson } from "@/lib/actions/products";
+import { saveNfse } from "@/lib/actions/connections";
+import { issueInvoices } from "@/lib/invoices";
+import { removeCredentials } from "@/lib/settings";
 import { POST as upload } from "@/app/admin/media/route";
 import { GET as attachment } from "@/app/m/[product]/[lesson]/anexo/route";
 import Members from "@/app/m/[[...path]]/page";
 import { ErrorText } from "@/app/ui";
-import { cookieStore, form, freshBrowser, redirected } from "./fakes";
+import { cookieStore, fakeServer, form, freshBrowser, redirected, redirectFetch } from "./fakes";
 import { buy, pay, signInAsAdmin } from "./flows";
 
 const MB = 1024 * 1024;
 const PDF_NAME = "Manual-do-Sono-do-Bebe.pdf";
 const NOON = new Date("2026-11-14T12:00:00-03:00");
+
+// The NFS-e goes to Sefin over mutual TLS; here the same requests reach a plain local server.
+let sefin = "";
+
+vi.mock("node:https", () => ({
+  request: (url: string, options: RequestOptions, callback: Parameters<typeof httpRequest>[2]) =>
+    httpRequest(url.replace(/^https:\/\/(sefin|adn)\.nfse\.gov\.br/, sefin), options, callback),
+}));
 
 let ip = 0;
 
@@ -145,4 +160,99 @@ describe("acttech", () => {
     expect(withoutPdf).not.toContain("Baixar o PDF");
     expect(withoutPdf).not.toContain("/anexo");
   });
+
+  test("nfse: descrição com o nome do produto", async () => {
+    const cnpj = "64076031000109";
+    const key = `3550308264076031000109${"0".repeat(28)}`;
+
+    const server = await fakeServer({
+      "GET /parametrizacao/3550308/convenio": {
+        status: 200,
+        body: { parametrosConvenio: { aderenteEmissorNacional: 1 } },
+      },
+      [`GET /api/cnpj/v1/${cnpj}`]: {
+        status: 200,
+        body: {
+          razao_social: "ACT TECH LTDA",
+          codigo_municipio_ibge: 3550308,
+          municipio: "SAO PAULO",
+          uf: "SP",
+          opcao_pelo_simples: true,
+          opcao_pelo_mei: false,
+        },
+      },
+      "HEAD *": { status: 404, body: "" },
+      "GET *": { status: 404, body: { erro: { codigo: "E0000" } } },
+      "POST /SefinNacional/nfse": { status: 201, body: { chaveAcesso: key, idDps: "x" } },
+    });
+
+    sefin = server.url;
+    redirectFetch("https://brasilapi.com.br", server.url);
+
+    try {
+      await signInAsAdmin();
+      const pfx = nfseForm(certificate(cnpj));
+      expect(await saveNfse({ code: null }, pfx)).toEqual({ code: null, ok: true });
+      await redirected(
+        createProduct({ code: null }, form({ name: "Manual do Sono do Bebê", slug: "manual-do-sono", price: "47,00" })),
+      );
+
+      freshBrowser("192.0.2.160");
+      const id = await buy({ email: "nota@example.com", slug: "manual-do-sono", document: "529.982.247-25" });
+      await pay(id, 4700, `nota-${id}`);
+      await issueInvoices();
+
+      const [issued] = server.to("POST", "/SefinNacional/nfse");
+      const xml = gunzipSync(Buffer.from(JSON.parse(issued?.body ?? "{}").dpsXmlGZipB64, "base64")).toString("utf8");
+      expect(xml).toContain("<xDescServ>Manual do Sono do Bebê</xDescServ>");
+      expect(xml).toContain("<vServ>47.00</vServ>");
+      expect(xml).not.toContain("Acesso ao curso online");
+    } finally {
+      vi.restoreAllMocks();
+      await removeCredentials("nfse");
+      await server.close();
+    }
+  });
 });
+
+// An e-CNPJ like the ones ICP-Brasil issues: the CNPJ under OID 2.16.76.1.3.3 in the alternative name.
+function certificate(cnpj: string): Buffer {
+  const keys = forge.pki.rsa.generateKeyPair(1024);
+  const cert = forge.pki.createCertificate();
+  cert.publicKey = keys.publicKey;
+  cert.serialNumber = "01";
+  cert.validity.notBefore = new Date("2026-01-01T00:00:00Z");
+  cert.validity.notAfter = new Date("2027-01-01T00:00:00Z");
+  const subject = [{ name: "commonName", value: `ACT TECH LTDA:${cnpj}` }];
+  cert.setSubject(subject);
+  cert.setIssuer(subject);
+  const { asn1 } = forge;
+
+  const otherName = asn1.create(asn1.Class.CONTEXT_SPECIFIC, 0, true, [
+    asn1.create(asn1.Class.UNIVERSAL, asn1.Type.OID, false, asn1.oidToDer("2.16.76.1.3.3").getBytes()),
+    asn1.create(asn1.Class.CONTEXT_SPECIFIC, 0, true, [
+      asn1.create(asn1.Class.UNIVERSAL, asn1.Type.OCTETSTRING, false, cnpj),
+    ]),
+  ]);
+
+  const names = asn1.create(asn1.Class.UNIVERSAL, asn1.Type.SEQUENCE, true, [otherName]);
+  cert.setExtensions([{ id: "2.5.29.17", value: asn1.toDer(names).getBytes() }]);
+  cert.sign(keys.privateKey, forge.md.sha256.create());
+  const p12 = forge.pkcs12.toPkcs12Asn1(keys.privateKey, [cert], "senha-do-a1", { algorithm: "3des" });
+  return Buffer.from(forge.asn1.toDer(p12).getBytes(), "binary");
+}
+
+function nfseForm(pfx: Buffer): FormData {
+  const data = form({
+    regime: "",
+    city: "",
+    service: "",
+    registration: "",
+    taxRate: "",
+    issRate: "",
+    password: "senha-do-a1",
+  });
+
+  data.set("certificate", new File([new Uint8Array(pfx)], "act-tech.pfx", { type: "application/x-pkcs12" }));
+  return data;
+}

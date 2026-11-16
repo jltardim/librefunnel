@@ -448,6 +448,11 @@ async function nextNumber(): Promise<string> {
   return String(Math.max(Date.now(), (row?.last ?? 0) + 1));
 }
 
+// What the order sold, by name: the service the note describes and the subject of the buyer's e-mail.
+function soldNames(row: Due, names: Map<string, string>): string {
+  return [row.product, row.bump].flatMap((slug) => (slug ? [names.get(slug) ?? slug] : [])).join(" + ");
+}
+
 async function settle(row: Due, outcome: Outcome, t: Date, names: Map<string, string>) {
   const byOrder = eq(invoice.orderId, row.orderId);
   if ("issued" in outcome) {
@@ -466,7 +471,7 @@ async function settle(row: Due, outcome: Outcome, t: Date, names: Map<string, st
         })
         .where(byOrder);
 
-      const title = [row.product, row.bump].flatMap((slug) => (slug ? [names.get(slug) ?? slug] : [])).join(" + ");
+      const title = soldNames(row, names);
       await tx
         .insert(message)
         .values({
@@ -549,11 +554,7 @@ export async function issueInvoices() {
         .set({ number, attempts: sql`${invoice.attempts} + 1` })
         .where(eq(invoice.orderId, row.orderId));
 
-      const description = [row.product, row.bump]
-        .flatMap((slug) => (slug ? [names.get(slug) ?? slug] : []))
-        .join(" + ");
-
-      outcome = await issue(nfse, row, number, `Acesso ao curso online ${description}`);
+      outcome = await issue(nfse, row, number, soldNames(row, names));
     }
     await settle(row, outcome, t, names);
   }
