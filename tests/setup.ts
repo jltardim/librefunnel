@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { setSystemTime, vi } from "bun:test";
 import * as navigation from "next/navigation";
 import * as server from "next/server";
-import { WEBHOOK_SECRET } from "./fakes";
+import * as fakes from "./fakes";
 
 // Next swaps server-only for an empty module on the server; the tests are server code too. It is mocked before the
 // store's modules load, so they are imported below, after the mocks.
@@ -18,27 +18,20 @@ process.env.TRUST_PROXY = "1";
 
 setSystemTime(new Date("2026-11-14T12:00:00-03:00"));
 
-vi.mock("next/headers", async () => {
-  const fakes = await import("./fakes");
-  return { cookies: async () => fakes.jar, headers: async () => fakes.requestHeaders };
-});
+vi.mock("next/headers", () => ({ cookies: async () => fakes.jar, headers: async () => fakes.requestHeaders }));
 
-vi.mock("next/navigation", async () => {
-  const fakes = await import("./fakes");
-  return {
-    ...navigation,
-    redirect: (to: string) => {
-      throw new fakes.RedirectSignal(to);
-    },
-  };
-});
+vi.mock("next/navigation", () => ({
+  ...navigation,
+  redirect: (to: string) => {
+    throw new fakes.RedirectSignal(to);
+  },
+}));
 
 vi.mock("next/cache", () => ({ revalidatePath: () => undefined }));
 
 vi.mock("next/server", () => ({ ...server, after: () => undefined, connection: async () => undefined }));
 
-vi.mock("nodemailer", async () => {
-  const fakes = await import("./fakes");
+vi.mock("nodemailer", () => {
   return {
     default: {
       createTransport: (options: (typeof fakes.mailTransports)[number]) => {
@@ -67,4 +60,4 @@ const { db, migrate, seedDemo } = await import("@/lib/db");
 await migrate();
 // The demo catalog is the fixture every suite buys from; the app itself loads it only in demo mode.
 await seedDemo(db(), "store.sql");
-await saveCredentials("webhook", {}, { secret: WEBHOOK_SECRET });
+await saveCredentials("webhook", {}, { secret: fakes.WEBHOOK_SECRET });
