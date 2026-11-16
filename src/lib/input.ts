@@ -191,6 +191,13 @@ export function parseAttachment(path: string, name: string): { url: string; name
   return valid ? { url, name: file } : undefined;
 }
 
+// A moment in ISO 8601 with its offset, like 2026-11-16T00:00:00-03:00, or a calendar day read as UTC midnight.
+export function parseInstant(raw: string): Date | undefined {
+  if (!/^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?(Z|[+-]\d{2}:\d{2}))?$/.test(raw)) return undefined;
+  const instant = new Date(raw);
+  return Number.isNaN(instant.getTime()) ? undefined : instant;
+}
+
 export function parseInteger(raw: string, min: number, max: number): number | undefined {
   const value = Number(raw.trim());
   return raw.trim() !== "" && Number.isInteger(value) && value >= min && value <= max ? value : undefined;

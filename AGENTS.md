@@ -60,9 +60,10 @@ no release; a release is for the store. Every change a seller notices goes under
   the Woovi conversion), `catalog/` (`products`, `course` for modules and lessons), `settings` (store settings and
   integration credentials), `media/` (`files`, `bucket` the S3 client, `uploads`, `serving`, `storage` connects the
   bucket, `video` transcodes, `sweep`, `backup`), `tracking/` (`funnel`, `visitors`, `retention`, `meta`), `coupons`,
-  `invoices` (NFS-e Nacional), `members`, `sessions` (admin, member and checkout sessions), `messages`, `dashboard`,
-  `guard`, `db`; `input` parses and validates every value that comes from outside (`parse*` returns the normalized value
-  or `undefined`), and `registry` is the only caller of public registries (CNPJ through BrasilAPI)
+  `invoices` (NFS-e Nacional), `sales` (the `/api/v1/vendas` report, on only with `VENDAS_TOKEN`), `members`, `sessions`
+  (admin, member and checkout sessions), `messages`, `dashboard`, `guard`, `db`; `input` parses and validates every
+  value that comes from outside (`parse*` returns the normalized value or `undefined`), and `registry` is the only
+  caller of public registries (CNPJ through BrasilAPI)
 - `src/format.ts`: every text the store formats for people, server and browser alike (`format*`: money, CPF and CNPJ,
   phones, names); a new formatter or validator goes there or in `input`, never inline in a screen or action
 - `src/lib/schema.ts`, `src/lib/migrations/`: Drizzle schema and the SQL migrations generated from it

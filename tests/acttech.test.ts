@@ -11,9 +11,11 @@ import { createProduct, saveLesson } from "@/lib/actions/products";
 import { saveNfse } from "@/lib/actions/connections";
 import { issueInvoices } from "@/lib/invoices";
 import { removeCredentials } from "@/lib/settings";
+import { recordTouch, visitor } from "@/lib/tracking/visitors";
 import { POST as upload } from "@/app/admin/media/route";
 import { GET as attachment } from "@/app/m/[product]/[lesson]/anexo/route";
 import Members from "@/app/m/[[...path]]/page";
+import { GET as sales } from "@/app/api/v1/vendas/route";
 import { ErrorText } from "@/app/ui";
 import { cookieStore, fakeServer, form, freshBrowser, redirected, redirectFetch } from "./fakes";
 import { buy, pay, signInAsAdmin } from "./flows";
@@ -211,6 +213,96 @@ describe("acttech", () => {
       vi.restoreAllMocks();
       await removeCredentials("nfse");
       await server.close();
+    }
+  });
+
+  test("vendas: 401 sem token, lista vazia e pedidos com UTM do último toque", async () => {
+    const token = "t".repeat(40);
+
+    const ask = (query: string, authorization?: string) =>
+      sales(
+        new Request(`https://shop.example/api/v1/vendas?${query}`, {
+          headers: authorization ? { authorization } : {},
+        }),
+      );
+
+    const october = "desde=2026-10-01T00:00:00-03:00&ate=2026-10-04T00:00:00-03:00";
+
+    delete process.env.VENDAS_TOKEN;
+    expect((await ask(october, `Bearer ${token}`)).status).toBe(404);
+    process.env.VENDAS_TOKEN = "curto";
+    expect((await ask(october, "Bearer curto")).status).toBe(404);
+    process.env.VENDAS_TOKEN = token;
+
+    try {
+      expect((await ask(october)).status).toBe(401);
+      expect((await ask(october, `Bearer ${"x".repeat(40)}`)).status).toBe(401);
+      expect((await ask(october, token)).status).toBe(401);
+
+      const empty = await ask("desde=2026-09-01T00:00:00-03:00&ate=2026-09-02T00:00:00-03:00", `Bearer ${token}`);
+      expect(empty.status).toBe(200);
+      expect(await empty.json()).toEqual({ loja: "shop.example", moeda: "brl", vendas: [] });
+
+      // An earlier visit, the visit that placed the order, then a visit after it: the middle one brought the sale.
+      freshBrowser("192.0.2.170");
+      setSystemTime(new Date("2026-10-01T09:00:00-03:00"));
+      await recordTouch(await visitor(), "?utm_source=tiktok&utm_content=antes", "", "/v/bolo-no-pote");
+      setSystemTime(new Date("2026-10-01T10:00:00-03:00"));
+      const touch = "?utm_source=instagram&utm_medium=dm&utm_campaign=r-com&utm_content=1789";
+      const paid = await buy({ email: "utm@example.com", phone: "(48) 98888-7777", touch });
+      setSystemTime(new Date("2026-10-01T10:05:00-03:00"));
+      await pay(paid, 9700, `utm-${paid}`);
+      setSystemTime(new Date("2026-10-01T11:00:00-03:00"));
+      await recordTouch(await visitor(), "?utm_source=email&utm_content=depois", "", "/v/bolo-no-pote");
+
+      freshBrowser("192.0.2.171");
+      setSystemTime(new Date("2026-10-02T10:00:00-03:00"));
+      const refunded = await buy({ email: "volta@example.com", slug: "planilha-preco" });
+      await pay(refunded, 4700, `utm-${refunded}`);
+      freshBrowser("192.0.2.172");
+      await buy({ email: "pendente@example.com" });
+      setSystemTime(new Date("2026-10-03T10:00:00-03:00"));
+      await signInAsAdmin();
+      expect(await refundOrder({ code: null }, form({ orderId: refunded }))).toEqual({ code: null, ok: true });
+
+      freshBrowser("192.0.2.173");
+      setSystemTime(new Date("2026-10-05T10:00:00-03:00"));
+      const later = await buy({ email: "depois@example.com" });
+      await pay(later, 9700, `utm-${later}`);
+
+      const report = await ask(october, `Bearer ${token}`);
+      expect(report.status).toBe(200);
+      const text = await report.text();
+      expect(JSON.parse(text)).toEqual({
+        loja: "shop.example",
+        moeda: "brl",
+        vendas: [
+          {
+            id: paid,
+            pago_em: "2026-10-01T13:05:00.000Z",
+            valor_centavos: 9700,
+            status: "pago",
+            utm_source: "instagram",
+            utm_medium: "dm",
+            utm_campaign: "r-com",
+            utm_content: "1789",
+          },
+          {
+            id: refunded,
+            pago_em: "2026-10-02T13:00:00.000Z",
+            valor_centavos: 4700,
+            status: "reembolsado",
+            utm_source: null,
+            utm_medium: null,
+            utm_campaign: null,
+            utm_content: null,
+          },
+        ],
+      });
+
+      for (const personal of ["@example.com", "Ana Souza", "98888", "192.0.2."]) expect(text).not.toContain(personal);
+    } finally {
+      delete process.env.VENDAS_TOKEN;
     }
   });
 });
