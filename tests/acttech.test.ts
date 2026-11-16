@@ -1,6 +1,8 @@
+import { createHmac } from "node:crypto";
 import { request as httpRequest } from "node:http";
 import type { RequestOptions } from "node:https";
 import { gunzipSync } from "node:zlib";
+import { eq } from "drizzle-orm";
 import forge from "node-forge";
 import { createElement } from "react";
 import { prerender } from "react-dom/static";
@@ -10,12 +12,17 @@ import { refundOrder } from "@/lib/actions/orders";
 import { createProduct, saveLesson } from "@/lib/actions/products";
 import { saveNfse } from "@/lib/actions/connections";
 import { issueInvoices } from "@/lib/invoices";
-import { removeCredentials } from "@/lib/settings";
+import { removeCredentials, saveCredentials } from "@/lib/settings";
+import { db, one } from "@/lib/db";
+import { currentMember } from "@/lib/members";
+import { checkCharges } from "@/lib/orders/charges";
+import { invoice, order, payment } from "@/lib/schema";
 import { recordTouch, visitor } from "@/lib/tracking/visitors";
 import { POST as upload } from "@/app/admin/media/route";
 import { GET as attachment } from "@/app/m/[product]/[lesson]/anexo/route";
 import Members from "@/app/m/[[...path]]/page";
 import { GET as sales } from "@/app/api/v1/vendas/route";
+import { POST as paymentWebhook } from "@/app/api/webhooks/payment/route";
 import { ErrorText } from "@/app/ui";
 import { cookieStore, fakeServer, form, freshBrowser, redirected, redirectFetch } from "./fakes";
 import { buy, pay, signInAsAdmin } from "./flows";
@@ -74,6 +81,64 @@ async function attachEbook(lesson: string): Promise<Buffer> {
     ok: true,
   });
   return bytes;
+}
+
+const CNPJ = "64076031000109";
+const NOTE_KEY = `3550308264076031000109${"0".repeat(28)}`;
+const ABACATE_SECRET = "abacate-webhook-secret-with-32-chars!";
+
+// Published on AbacatePay's webhook security page.
+const ABACATEPAY_SIGNING_KEY =
+  "t9dXRhHHo3yDEj5pVDYz0frf7q6bMKyMRmxxCPIPp3RCplBfXRxqlC6ZpiWmOqj4L63qEaeUOtrCI8P0VMUgo6iIga2ri9ogaHFs0WIIywSMg0q7RmBfybe1E5XJcfC4IW3alNqym0tXoAKkzvfEjZxV6bE0oG2zJrNNYmUCKZyV0KZ3JS8Votf9EAWWYdiDkMkpbMdPggfh1EqHlVkMiTady6jOR3hyzGEHrIz2Ret0xHKMbiqkr9HS1JhNHDX9";
+
+// One fake for everything the store calls outside here: the CNPJ registry, Sefin and AbacatePay. NFS-e is turned on.
+async function outside() {
+  const server = await fakeServer({
+    "GET /parametrizacao/3550308/convenio": {
+      status: 200,
+      body: { parametrosConvenio: { aderenteEmissorNacional: 1 } },
+    },
+    [`GET /api/cnpj/v1/${CNPJ}`]: {
+      status: 200,
+      body: {
+        razao_social: "ACT TECH LTDA",
+        codigo_municipio_ibge: 3550308,
+        municipio: "SAO PAULO",
+        uf: "SP",
+        opcao_pelo_simples: true,
+        opcao_pelo_mei: false,
+      },
+    },
+    "HEAD *": { status: 404, body: "" },
+    "GET *": { status: 404, body: { erro: { codigo: "E0000" } } },
+    "POST /SefinNacional/nfse": { status: 201, body: { chaveAcesso: NOTE_KEY, idDps: "x" } },
+  });
+
+  sefin = server.url;
+  redirectFetch(/^https:\/\/(brasilapi\.com\.br|api\.abacatepay\.com)/, server.url);
+  await signInAsAdmin();
+  expect(await saveNfse({ code: null }, nfseForm(certificate(CNPJ)))).toEqual({ code: null, ok: true });
+  return server;
+}
+
+// The notice only names the charge; the store then reads its status from AbacatePay, as it does for every event.
+function abacateNotice(event: string, chargeId: string) {
+  const raw = JSON.stringify({
+    id: `log_${event}`,
+    event,
+    apiVersion: 2,
+    devMode: false,
+    data: { transparent: { id: chargeId } },
+  });
+
+  const signature = createHmac("sha256", ABACATEPAY_SIGNING_KEY).update(raw).digest("base64");
+  return paymentWebhook(
+    new Request("https://shop.example/api/webhooks/payment?psp=abacatepay", {
+      method: "POST",
+      body: raw,
+      headers: { "x-webhook-secret": ABACATE_SECRET, "x-webhook-signature": signature },
+    }),
+  );
 }
 
 async function buyer(email: string, slug = "bolo-no-pote", amount = 9700): Promise<string> {
@@ -164,37 +229,9 @@ describe("acttech", () => {
   });
 
   test("nfse: descrição com o nome do produto", async () => {
-    const cnpj = "64076031000109";
-    const key = `3550308264076031000109${"0".repeat(28)}`;
-
-    const server = await fakeServer({
-      "GET /parametrizacao/3550308/convenio": {
-        status: 200,
-        body: { parametrosConvenio: { aderenteEmissorNacional: 1 } },
-      },
-      [`GET /api/cnpj/v1/${cnpj}`]: {
-        status: 200,
-        body: {
-          razao_social: "ACT TECH LTDA",
-          codigo_municipio_ibge: 3550308,
-          municipio: "SAO PAULO",
-          uf: "SP",
-          opcao_pelo_simples: true,
-          opcao_pelo_mei: false,
-        },
-      },
-      "HEAD *": { status: 404, body: "" },
-      "GET *": { status: 404, body: { erro: { codigo: "E0000" } } },
-      "POST /SefinNacional/nfse": { status: 201, body: { chaveAcesso: key, idDps: "x" } },
-    });
-
-    sefin = server.url;
-    redirectFetch("https://brasilapi.com.br", server.url);
+    const server = await outside();
 
     try {
-      await signInAsAdmin();
-      const pfx = nfseForm(certificate(cnpj));
-      expect(await saveNfse({ code: null }, pfx)).toEqual({ code: null, ok: true });
       await redirected(
         createProduct({ code: null }, form({ name: "Manual do Sono do Bebê", slug: "manual-do-sono", price: "47,00" })),
       );
@@ -303,6 +340,66 @@ describe("acttech", () => {
       for (const personal of ["@example.com", "Ana Souza", "98888", "192.0.2."]) expect(text).not.toContain(personal);
     } finally {
       delete process.env.VENDAS_TOKEN;
+    }
+  });
+
+  // docs.abacatepay.com/pages/webhooks/events/transparent: an open dispute (MED on Pix) is UNDER_DISPUTE, a lost one
+  // goes back to REFUNDED, announced by transparent.disputed and transparent.lost.
+  test("abacatepay: MED perdido revoga o acesso e disputa aberta não", async () => {
+    const server = await outside();
+    const key = `${NOTE_KEY.slice(0, -1)}1`;
+    server.routes["POST /SefinNacional/nfse"] = { status: 201, body: { chaveAcesso: key, idDps: "x" } };
+    server.routes[`POST /SefinNacional/nfse/${key}/eventos`] = { status: 201, body: { eventoXmlGZipB64: "" } };
+
+    const charge = (status: string, reason?: string) => {
+      const entry = { id: "pix_med", amount: 9700, status, devMode: false, brCode: "x", ...(reason ? { reason } : {}) };
+      server.routes["GET /v2/transparents/list"] = { status: 200, body: { data: [entry], success: true, error: null } };
+    };
+
+    const state = async (id: string) => ({
+      status: one(await db().select({ status: order.status }).from(order).where(eq(order.id, id))).status,
+      payments: (
+        await db().select({ amount: payment.amount }).from(payment).where(eq(payment.orderId, id)).orderBy(payment.id)
+      ).map((row) => row.amount),
+      note: one(await db().select({ status: invoice.status }).from(invoice).where(eq(invoice.orderId, id))).status,
+      access: (await currentMember())?.owned ?? [],
+    });
+
+    try {
+      await saveCredentials("abacatepay", {}, { apiKey: "abc_prod_key", webhookSecret: ABACATE_SECRET });
+      await saveCredentials("pix", { provider: "abacatepay" });
+      freshBrowser("192.0.2.180");
+      const id = await buy({ email: "med@example.com", document: "529.982.247-25" });
+      await db().update(order).set({ psp: "abacatepay", txid: "pix_med" }).where(eq(order.id, id));
+
+      charge("PAID");
+      await abacateNotice("transparent.completed", "pix_med");
+      await checkCharges();
+      await redirected(enterFromOrder());
+      await issueInvoices();
+      expect(await state(id)).toEqual({ status: "paid", payments: [9700], note: "issued", access: ["bolo-no-pote"] });
+
+      charge("UNDER_DISPUTE", "Dispute created");
+      await abacateNotice("transparent.disputed", "pix_med");
+      await checkCharges();
+      await issueInvoices();
+      expect(await state(id)).toEqual({ status: "paid", payments: [9700], note: "issued", access: ["bolo-no-pote"] });
+      expect(server.to("POST", `/SefinNacional/nfse/${key}/eventos`)).toHaveLength(0);
+
+      charge("REFUNDED", "Dispute created");
+      await abacateNotice("transparent.lost", "pix_med");
+      await checkCharges();
+      await abacateNotice("transparent.disputed", "pix_med");
+      await checkCharges();
+      await issueInvoices();
+      expect(await state(id)).toEqual({ status: "refunded", payments: [9700, -9700], note: "canceled", access: [] });
+      expect(server.to("POST", `/SefinNacional/nfse/${key}/eventos`)).toHaveLength(1);
+    } finally {
+      vi.restoreAllMocks();
+      await removeCredentials("nfse");
+      await removeCredentials("abacatepay");
+      await saveCredentials("pix", { provider: "static" });
+      await server.close();
     }
   });
 });
