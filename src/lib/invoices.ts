@@ -262,6 +262,9 @@ function rejectionOf(body: JsonObject | undefined): string | undefined {
 function rejected(reply: Reply): Outcome {
   const rejection = rejectionOf(reply.body);
   const code = REJECTIONS.find(([, codes]) => rejection && codes.includes(rejection))?.[0] ?? "NFSE_REJECTED";
+  // The text names the field Sefin refused; it goes only to the server log, so the stored row keeps just the code.
+  if (code === "NFSE_REJECTED")
+    console.warn(`[librefunnel] nfse ${rejection ?? "rejected"} (HTTP ${reply.status})`, JSON.stringify(reply.body ?? {}).slice(0, 2000));
   return { code, rejection };
 }
 
