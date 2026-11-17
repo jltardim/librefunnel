@@ -242,7 +242,7 @@ describe("NFS-e", () => {
     const [issued] = server.to("POST", "/SefinNacional/nfse");
     const xml = unpacked(issued?.body ?? "{}", "dpsXmlGZipB64");
     expect(xml).toMatch(
-      /^<DPS xmlns="http:\/\/www\.sped\.fazenda\.gov\.br\/nfse" versao="1\.01"><infDPS Id="DPS3550308211222333000181471010\d{14}">/,
+      /^<\?xml version="1\.0" encoding="UTF-8"\?><DPS xmlns="http:\/\/www\.sped\.fazenda\.gov\.br\/nfse" versao="1\.01"><infDPS Id="DPS3550308211222333000181471010\d{14}">/,
     );
     const issuedAt = new Date(now.getTime() - 3 * 3600_000 - 10_000).toISOString().slice(0, 19);
     expect(xml).toContain(`<dhEmi>${issuedAt}-03:00</dhEmi>`);
@@ -270,6 +270,7 @@ describe("NFS-e", () => {
     await issueInvoices();
     const [event] = server.to("POST", `/SefinNacional/nfse/${KEY}/eventos`);
     const cancel = unpacked(event?.body ?? "{}", "pedidoRegistroEventoXmlGZipB64");
+    expect(cancel.startsWith('<?xml version="1.0" encoding="UTF-8"?><pedRegEvento ')).toBe(true);
     expect(cancel).toContain(`<infPedReg Id="PRE${KEY}101101">`);
     expect(cancel).toContain(`<CNPJAutor>${CNPJ}</CNPJAutor><chNFSe>${KEY}</chNFSe>`);
     verifySignature(cancel, "infPedReg");

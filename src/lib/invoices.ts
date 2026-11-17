@@ -297,8 +297,9 @@ function signed(root: string, version: string, inner: string, id: string, nfse: 
   return `<${root} xmlns="${NFSE_NS}" versao="${version}">${inner}<Signature xmlns="${DSIG_NS}"><SignedInfo>${info}</SignedInfo><SignatureValue>${value}</SignatureValue><KeyInfo><X509Data><X509Certificate>${leaf}</X509Certificate></X509Data></KeyInfo></Signature></${root}>`;
 }
 
+// Sefin refuses a document without the declaration with E1229 ("Xml não está utilizando codificação UTF-8").
 function packed(xml: string): string {
-  return gzipSync(Buffer.from(xml, "utf8")).toString("base64");
+  return gzipSync(Buffer.from(`<?xml version="1.0" encoding="UTF-8"?>${xml}`, "utf8")).toString("base64");
 }
 
 function dpsId(nfse: Nfse, number: string): string {
