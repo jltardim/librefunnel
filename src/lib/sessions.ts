@@ -12,7 +12,8 @@ export type Session = { customerId: string | null; orderId: string | null };
 
 const ADMIN_TTL = 12 * 3600;
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
-const SAME_SITE: Record<Kind, "lax" | "strict"> = { admin: "strict", member: "lax", order: "lax" };
+// admin_link never becomes a cookie; it is listed only because Kind includes it.
+const SAME_SITE: Record<Kind, "lax" | "strict"> = { admin: "strict", member: "lax", order: "lax", admin_link: "strict" };
 
 // __Host- makes the browser keep the cookie only if it is Secure, host-only and on /, so neither a subdomain nor a
 // product domain can plant or overwrite it. Plain http (local development) cannot carry the prefix.
@@ -93,6 +94,30 @@ export async function signInAdmin(password: string, ip: string): Promise<GuardCo
   if (!adminPasswordMatches(password)) return "INVALID_PASSWORD";
   await startSession("admin", { tag: adminTag() }, ADMIN_TTL);
   return null;
+}
+
+// The Publicador signs the owner in with a one-time link: same session as the password, opened by the owner's
+// Executor login instead. The link is deleted in the same statement that checks it, so two clicks open one session.
+const LINK_TTL = 60;
+
+export async function createAdminLink(): Promise<string> {
+  const token = randomBytes(32).toString("base64url");
+  const t = new Date();
+  await db()
+    .insert(session)
+    .values({ tokenHash: sha256(token), kind: "admin_link", createdAt: t, expiresAt: addSeconds(t, LINK_TTL) });
+  return token;
+}
+
+export async function signInWithLink(token: string): Promise<boolean> {
+  if (!TOKEN.test(token)) return false;
+  const used = await db()
+    .delete(session)
+    .where(and(eq(session.tokenHash, sha256(token)), eq(session.kind, "admin_link"), gt(session.expiresAt, new Date())))
+    .returning({ tokenHash: session.tokenHash });
+  if (used.length === 0) return false;
+  await startSession("admin", { tag: adminTag() }, ADMIN_TTL);
+  return true;
 }
 
 export async function signOutAdmin() {

@@ -40,7 +40,8 @@ const ORDER_STATUSES = literals("pending", "paid", "expired", "canceled", "refun
 const PAYMENT_SOURCES = literals("webhook", "admin");
 const CLICK_KINDS = literals("", "fbclid", "gclid", "ttclid", "gbraid", "wbraid");
 const COUPON_KINDS = literals("percent", "fixed");
-const SESSION_KINDS = literals("admin", "member", "order");
+// admin_link: the Publicador's one-time sign-in link, kept 60 seconds and deleted when used.
+const SESSION_KINDS = literals("admin", "member", "order", "admin_link");
 
 const EVENT_NAMES = literals(
   "page_view",

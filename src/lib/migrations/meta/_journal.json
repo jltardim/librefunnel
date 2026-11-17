@@ -162,6 +162,13 @@
       "when": 1794936735536,
       "tag": "0022_asaas",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1794944638690,
+      "tag": "0023_admin_link",
+      "breakpoints": true
     }
   ]
 }

@@ -1,0 +1,2 @@
+ALTER TABLE "session" DROP CONSTRAINT "session_kind";--> statement-breakpoint
+ALTER TABLE "session" ADD CONSTRAINT "session_kind" CHECK ("session"."kind" IN ('admin', 'member', 'order', 'admin_link'));
