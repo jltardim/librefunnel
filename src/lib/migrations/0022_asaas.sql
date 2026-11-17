@@ -1,0 +1,2 @@
+ALTER TABLE "integration" DROP CONSTRAINT "integration_kind";--> statement-breakpoint
+ALTER TABLE "integration" ADD CONSTRAINT "integration_kind" CHECK ("integration"."kind" IN ('smtp', 'meta', 'tiktok', 'analytics', 'googleads', 'pix', 'mercadopago', 'woovi', 'abacatepay', 'depix', 'noxpay', 'asaas', 'webhook', 'evolution', 'whatsapp', 'storage', 'nfse'));

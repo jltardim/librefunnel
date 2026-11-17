@@ -156,6 +156,9 @@ export async function savePix(...[, form]: FormArgs): Promise<ActionState> {
       return { code: "INVALID_CREDENTIAL" };
     if ((provider === "abacatepay" || provider === "depix") && webhookSecret && webhookSecret.length < 32)
       return { code: "INVALID_WEBHOOK_SECRET" };
+    // Asaas takes a webhook token of 32 to 255 characters.
+    if (provider === "asaas" && webhookSecret && (webhookSecret.length < 32 || webhookSecret.length > 255))
+      return { code: "INVALID_WEBHOOK_SECRET" };
 
     const fields =
       provider === "depix" ? { clientId } : provider === "noxpay" ? { currency: field(form, "currency") } : {};

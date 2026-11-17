@@ -117,6 +117,7 @@ const INTEGRATION_KINDS = literals(
   "abacatepay",
   "depix",
   "noxpay",
+  "asaas",
   "webhook",
   "evolution",
   "whatsapp",

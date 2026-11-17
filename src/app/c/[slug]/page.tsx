@@ -7,7 +7,7 @@ import { getProduct, orderBump } from "@/lib/catalog/products";
 import { settings } from "@/lib/settings";
 import type { Product } from "@/lib/catalog/products";
 import type { Settings } from "@/lib/settings";
-import { invoicesOn } from "@/lib/invoices";
+import { documentField } from "@/lib/orders/charges";
 import { standing } from "@/lib/members";
 import { getPixOrder, offerOpen } from "@/lib/orders/checkout";
 import { Footer, StoreHeader, Testimonials } from "@/app/buyer";
@@ -128,9 +128,9 @@ export default async function Checkout({ params, searchParams }: Props) {
 
   const typed = prefill(query.coupon, 30);
 
-  const [bump, invoices, state, applied] = await Promise.all([
+  const [bump, documentMode, state, applied] = await Promise.all([
     orderBump(product),
-    invoicesOn(),
+    documentField(),
     standing(slug),
     typed ? tryCoupon(typed, product, null, clientIp(await headers())) : undefined,
   ]);
@@ -193,7 +193,7 @@ export default async function Checkout({ params, searchParams }: Props) {
                   termsUrl={store.termsUrl}
                   guaranteeDays={product.guaranteeDays}
                   phone={store.checkoutPhone}
-                  document={invoices}
+                  document={documentMode}
                   confirmEmail={store.confirmEmail}
                   button={store.checkoutButton}
                   trust={store.checkoutTrust}

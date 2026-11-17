@@ -90,6 +90,7 @@ const INTEGRATIONS = {
   abacatepay: { fields: [], secrets: ["apiKey", "webhookSecret"] },
   depix: { fields: ["clientId"], secrets: ["apiKey", "webhookSecret"] },
   noxpay: { fields: ["currency"], secrets: ["apiKey", "webhookSecret"] },
+  asaas: { fields: [], secrets: ["apiKey", "webhookSecret"] },
   webhook: { fields: [], secrets: ["secret"] },
   storage: { fields: ["endpoint", "bucket", "region", "accessKey"], secrets: ["secret"] },
   evolution: { fields: ["url"], secrets: ["key"] },

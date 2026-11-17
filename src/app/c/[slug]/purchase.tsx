@@ -35,7 +35,7 @@ export function Purchase({
   termsUrl?: string;
   guaranteeDays: number;
   phone: "optional" | "required" | "hidden";
-  document: boolean;
+  document: "optional" | "required" | "hidden";
   confirmEmail: boolean;
   button: string;
   trust: boolean;
@@ -114,12 +114,16 @@ export function Purchase({
             )}
           </Field>
         )}
-        {document ? (
-          <Field label="CPF ou CNPJ na nota (opcional)" hint={<FieldMessage code="INVALID_DOCUMENT" />}>
+        {document !== "hidden" ? (
+          <Field
+            label={document === "required" ? "CPF ou CNPJ (para o Pix e a nota)" : "CPF ou CNPJ na nota (opcional)"}
+            hint={<FieldMessage code="INVALID_DOCUMENT" />}
+          >
             {(control) => (
               <Input
                 {...control}
                 name="document"
+                required={document === "required"}
                 inputMode="numeric"
                 maxLength={18}
                 autoComplete="off"

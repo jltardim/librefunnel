@@ -3,8 +3,10 @@ import { and, asc, desc, eq, gt, isNotNull, isNull, lte } from "drizzle-orm";
 import { credentials } from "../settings";
 import { addSeconds, db } from "../db";
 import { demoMode } from "../guard";
+import { invoicesOn } from "../invoices";
 import { customer, order } from "../schema";
 import { abacatepay } from "./abacatepay";
+import { asaas } from "./asaas";
 import type { OrderCode, OrderStatus } from "./checkout";
 import { depix } from "./depix";
 import { mercadopago } from "./mercadopago";
@@ -14,7 +16,15 @@ import { PSPS, pspConfigured, pspKeys, pspOf } from "./psp";
 import type { Adapter, Psp } from "./psp";
 import { refreshWebhookKeys, woovi } from "./woovi";
 
-export const ADAPTERS: Record<Psp, Adapter> = { mercadopago, woovi, abacatepay, depix, noxpay };
+export const ADAPTERS: Record<Psp, Adapter> = { mercadopago, woovi, abacatepay, depix, noxpay, asaas };
+
+export type DocumentField = "hidden" | "optional" | "required";
+
+// Asaas creates no charge without the buyer's CPF or CNPJ, so with it the field stops being optional.
+export async function documentField(): Promise<DocumentField> {
+  if ((await credentials("pix"))("pix")("provider") === "asaas") return "required";
+  return (await invoicesOn()) ? "optional" : "hidden";
+}
 
 export async function testPsp(psp: Psp): Promise<OrderCode | null> {
   const keys = pspKeys((await credentials(psp))(psp));
@@ -44,6 +54,7 @@ export async function attachCharges() {
       amount: order.amount,
       name: order.name,
       phone: order.phone,
+      document: order.document,
       expiresAt: order.expiresAt,
       email: customer.email,
     })

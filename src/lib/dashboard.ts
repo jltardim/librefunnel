@@ -605,6 +605,7 @@ export async function integrations() {
       "abacatepay",
       "depix",
       "noxpay",
+      "asaas",
       "webhook",
       "evolution",
       "whatsapp",

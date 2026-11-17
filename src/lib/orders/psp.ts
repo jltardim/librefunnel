@@ -5,7 +5,7 @@ import { isObject, jsonObject } from "../guard";
 import type { GuardCode, Json, JsonObject } from "../guard";
 import type { OrderCode } from "./checkout";
 
-export const PSPS = ["mercadopago", "woovi", "abacatepay", "depix", "noxpay"] as const;
+export const PSPS = ["mercadopago", "woovi", "abacatepay", "depix", "noxpay", "asaas"] as const;
 
 // Each code is one currency on one network, as NoxPay lists them.
 export const NOXPAY_CURRENCIES = [
@@ -31,7 +31,15 @@ export type PspKeys = {
 
 export type PspResponse = { status: number; body: JsonObject | undefined; raw: string; retryIn: number };
 
-type ChargeRow = { id: string; product: string; amount: number; name: string; email: string; phone: string | null };
+type ChargeRow = {
+  id: string;
+  product: string;
+  amount: number;
+  name: string;
+  email: string;
+  phone: string | null;
+  document: string | null;
+};
 
 type Movement = { amount: number; externalId: string };
 
@@ -57,7 +65,15 @@ export const PSP_HOSTS: Record<Psp, string> = {
   abacatepay: "https://api.abacatepay.com",
   depix: "https://depix.eulen.app",
   noxpay: "https://checkout.noxpay.io",
+  asaas: "https://api.asaas.com",
 };
+
+// An Asaas sandbox key only works on the sandbox host, so the key alone decides where the store calls.
+const ASAAS_SANDBOX = "https://api-sandbox.asaas.com";
+
+function pspHost(psp: Psp, apiKey: string): string {
+  return psp === "asaas" && apiKey.startsWith("$aact_hmlg_") ? ASAAS_SANDBOX : PSP_HOSTS[psp];
+}
 
 // Neither Woovi nor AbacatePay documents a maximum expiry; 72 hours is the longest value their docs show working.
 export const PSP_MAX_SECONDS = 72 * 3600;
@@ -110,6 +126,21 @@ export const PIX_PROVIDERS: { id: PixProvider; name: string; needsCnpj: boolean;
     fee: "Você recebe USDT, USDC ou Bitcoin no saldo NoxPay. O comprador paga numa página da NoxPay, com CPF. Libera o acesso sozinho.",
     events: [],
   },
+  {
+    id: "asaas",
+    name: "Asaas",
+    needsCnpj: false,
+    fee: "Taxa do seu plano Asaas por Pix recebido. Pede o CPF do comprador no checkout. Libera o acesso sozinho.",
+    events: [
+      "PAYMENT_RECEIVED",
+      "PAYMENT_CONFIRMED",
+      "PAYMENT_REFUNDED",
+      "PAYMENT_PARTIALLY_REFUNDED",
+      "PAYMENT_CHARGEBACK_REQUESTED",
+      "PAYMENT_CHARGEBACK_DISPUTE",
+      "PAYMENT_AWAITING_CHARGEBACK_REVERSAL",
+    ],
+  },
 ];
 
 export function pixProvider(value: string): PixProvider | undefined {
@@ -148,14 +179,14 @@ export async function callPsp(
   idempotencyKey?: string,
 ): Promise<PspResponse> {
   const headers = new Headers({ "Content-Type": "application/json" });
-  if (apiKey)
-    headers.set(
-      psp === "noxpay" ? "api-key" : "Authorization",
-      psp === "woovi" || psp === "noxpay" ? apiKey : `Bearer ${apiKey}`,
-    );
+  const header = psp === "noxpay" ? "api-key" : psp === "asaas" ? "access_token" : "Authorization";
+  const plain = psp === "woovi" || psp === "noxpay" || psp === "asaas";
+  if (apiKey) headers.set(header, plain ? apiKey : `Bearer ${apiKey}`);
+  // Asaas refuses calls from newer accounts that carry no User-Agent.
+  if (psp === "asaas") headers.set("User-Agent", "librefunnel");
   if (idempotencyKey) headers.set("X-Idempotency-Key", idempotencyKey);
 
-  const response = await fetch(`${PSP_HOSTS[psp]}${path}`, {
+  const response = await fetch(`${pspHost(psp, apiKey)}${path}`, {
     method: body === undefined ? "GET" : "POST",
     headers,
     body: body === undefined ? undefined : JSON.stringify(body),

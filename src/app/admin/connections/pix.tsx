@@ -12,51 +12,13 @@ import { ActionButton, SaveForm } from "../ui";
 import styles from "./connections.module.css";
 import { PixFields } from "../products/pix-fields";
 import { RemoveButton, SecretInput, Steps, TestButton } from "./parts";
+import { PIX_HELP } from "./pix-help";
 
 type Provider = Links["pix"]["providers"][number];
 type Paid = Exclude<Provider["id"], "static">;
 
-const HELP: Record<Paid, { apiKey: string; webhookSecret: string; panel: string; keys: string; webhook: string }> = {
-  mercadopago: {
-    apiKey: "Access Token de produção",
-    webhookSecret: "Assinatura secreta do webhook",
-    panel: "https://www.mercadopago.com.br/developers/panel/app",
-    keys: "Em Suas integrações > Credenciais de produção, copie o Access Token.",
-    webhook: "Em Suas integrações > Webhooks, cole este endereço, marque o evento e copie a assinatura secreta.",
-  },
-  woovi: {
-    apiKey: "AppID",
-    webhookSecret: "Authorization do webhook (opcional)",
-    panel: "https://app.woovi.com",
-    keys: "Em API/Plugins > Nova API/Plugin, escolha API e copie o AppID.",
-    webhook: "Em API/Plugins > Novo webhook, crie um webhook com este endereço para cada evento.",
-  },
-  abacatepay: {
-    apiKey: "Chave da API (v2)",
-    webhookSecret: "Segredo do webhook (32 caracteres ou mais)",
-    panel: "https://app.abacatepay.com",
-    keys: "Em Integração > API > Nova chave, escolha API v2 e copie a chave.",
-    webhook:
-      "Em Integração > Webhooks > Criar webhook (v2), cole este endereço, invente um segredo e marque os eventos.",
-  },
-  depix: {
-    apiKey: "Client Secret",
-    webhookSecret: "Segredo do webhook (32 caracteres ou mais)",
-    panel: "https://depix.info/#partners",
-    keys: "Peça acesso de parceiro à Eulen. No seu canal do Telegram com ela, em #Bot, envie /addclientcredentials librefunnel e copie o Client ID e o Client Secret. O DePix vai para o endereço Liquid padrão da sua conta Eulen.",
-    webhook:
-      "No mesmo canal, invente um segredo de 32 caracteres ou mais e envie /registerwebhook deposit, este endereço e o segredo, separados por espaço. Repita com med no lugar de deposit.",
-  },
-  noxpay: {
-    apiKey: "API Key",
-    webhookSecret: "Webhook Secret",
-    panel: "https://noxpay.io",
-    keys: "Em Settings > API Keys, crie uma chave e copie a API Key e o Webhook Secret. Não precisa cadastrar webhook: a loja envia o endereço em cada cobrança.",
-    webhook: "",
-  },
-};
 
-function Setup({ provider, help }: { provider: Provider; help: (typeof HELP)[Paid] }) {
+function Setup({ provider, help }: { provider: Provider; help: (typeof PIX_HELP)[Paid] }) {
   return (
     <Steps>
       <li>
@@ -162,7 +124,7 @@ function ProviderTile({ provider, account }: { provider: Provider; account: Link
             <Dialog
               trigger={{ label: provider.configured ? "Configurar" : "Conectar", size: "sm" }}
               title={`Conectar ${provider.name}`}
-              body={<Setup provider={provider} help={HELP[provider.id]} />}
+              body={<Setup provider={provider} help={PIX_HELP[provider.id]} />}
             />
             {provider.configured ? (
               <>

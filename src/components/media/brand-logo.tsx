@@ -17,6 +17,7 @@ const BRANDS: Record<string, Entry> = {
   abacatepay: { src: "/brands/abacatepay.svg" },
   depix: { src: "/brands/depix.svg" },
   noxpay: { src: "/brands/noxpay.svg" },
+  asaas: { color: "#0030b9", initials: "A" },
   pix: { icon: "pix", color: "#32bcad" },
   gmail: { logo: "google-gmail" },
   brevo: { icon: "brevo", color: "#0b996e" },
